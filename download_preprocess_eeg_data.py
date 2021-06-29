@@ -146,7 +146,7 @@ with open(csv_filename, 'w', newline='') as csvfile:
             for channel in range(len(signals)):
 
                 begin_idx = int(header["annotations"][idx][0] * sample_rate)
-                end_idx   = int((header["annotations"][idx][0] + header["annotations"][idx][1]) * sample_rate)
+                end_idx   = begin_idx + length_time
 
                 code_label = header["annotations"][idx][2]
                 

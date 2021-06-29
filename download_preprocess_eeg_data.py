@@ -140,7 +140,7 @@ with open(csv_filename, 'w', newline='') as csvfile:
 
         for idx in range(len(header["annotations"])):
 
-            length_time = int(np.ceil(header["annotations"][idx][1] * sample_rate)) 
+            length_time = int(np.ceil(header["annotations"][idx][1] * sample_rate)) - 2
             data = np.zeros((len(signals), length_time))
 
             for channel in range(len(signals)):

@@ -61,6 +61,7 @@ Download the data from Zenodo and unzip
 """
 import urllib.request
 from zipfile import ZipFile
+import glob
 from tqdm import tqdm
 
 zip_url = 'https://physionet.org/static/published-projects/eegmmidb/eeg-motor-movementimagery-dataset-1.0.0.zip'
@@ -78,19 +79,22 @@ def download_url(url, output_path):
                              miniters=1, desc=url.split('/')[-1]) as t:
         urllib.request.urlretrieve(url, filename=output_path, reporthook=t.update_to)
 
-print("Downloading the EEG dataset")
-download_url(zip_url, 'temp_eeg_data.zip')
+if len(glob.glob("./files/S*/*.edf")) == 0:
+    print("Downloading the EEG dataset")
+    download_url(zip_url, 'temp_eeg_data.zip')
 
-# Open the .zip file
-print("Unzipping the dataset")
-with ZipFile(file='temp_eeg_data.zip') as zip_file:
+    # Open the .zip file
+    print("Unzipping the dataset")
+    with ZipFile(file='temp_eeg_data.zip') as zip_file:
 
-    # Loop over each file
-    for file in tqdm(iterable=zip_file.namelist(), total=len(zip_file.namelist())):
+        # Loop over each file
+        for file in tqdm(iterable=zip_file.namelist(), total=len(zip_file.namelist())):
 
-        # Extract each file to another directory
-        # If you want to extract to current working directory, don't specify path
-        zip_file.extract(member=file, path='.')
+            # Extract each file to another directory
+            # If you want to extract to current working directory, don't specify path
+            zip_file.extract(member=file, path='.')
+else:
+    print("Dataset already downloaded.")
 """
 END download data
 """
@@ -98,7 +102,6 @@ END download data
 from pyedflib import highlevel
 
 import csv
-import glob
 import os
 import numpy as np
 
@@ -119,17 +122,19 @@ tasks = ["Baseline, eyes open",
          "Task 3",
          "Task 4"]
 
+print("Extracting EEG segments for tasks.")
+
 csv_filename = "eeg_data.csv"
 print(f"Exporting to CSV file: {csv_filename}")
 filenames = tqdm(glob.glob("./files/S*/*.edf"), position=0)
 
 with open(csv_filename, 'w', newline='') as csvfile:
     datawriter = csv.writer(csvfile, quoting=csv.QUOTE_MINIMAL)
-    datawriter.writerow(["Filename", "Task", "Run", "Code", "EEG"])
+    datawriter.writerow(["Filename", "Task", "Run", "Code", "Class", "EEG"])
     
     for filename in filenames:
 
-        filenames.set_description(f"{filename}")
+        filenames.set_description(f"File: {filename}")
 
         run_idx = int(os.path.splitext(os.path.basename(filename))[0].split("R")[1]) - 1
         task = tasks[run_idx]
@@ -138,24 +143,19 @@ with open(csv_filename, 'w', newline='') as csvfile:
 
         sample_rate = signal_headers[0]["sample_rate"]
 
-        for idx in range(len(header["annotations"])):
+        for idx in range(len(header["annotations"])): # T0, T1, T2
 
-            length_time = int(np.ceil(header["annotations"][idx][1] * sample_rate)) - 2
-            data = np.zeros((len(signals), length_time))
-
-            for channel in range(len(signals)):
-
-                begin_idx = int(header["annotations"][idx][0] * sample_rate)
-                end_idx   = begin_idx + length_time + 1
-
-                code_label = header["annotations"][idx][2]
-                
-                eeg = signals[channel, begin_idx:end_idx]
-                eeg = (eeg - np.mean(eeg)) / np.std(eeg)
-
-                data[channel, :len(eeg)] = eeg
+            code_label = header["annotations"][idx][2]
             
-        datawriter.writerow([filename, task, run_idx, code_label, data])
+            length_time = int(header["annotations"][idx][1] * sample_rate)
+            begin_idx = int(header["annotations"][idx][0] * sample_rate)
+            end_idx   = begin_idx + length_time
+
+            eeg = signals[:, begin_idx:end_idx]
+            eeg = (eeg - np.mean(eeg, 0)) / (np.std(eeg, 0) + np.finfo(float).eps)
+
+        class_name = task + "_" + code_label
+        datawriter.writerow([filename, task, run_idx, code_label, class_name, eeg])
 
 print(f"FINISHED. Data is in {csv_filename}")
 
